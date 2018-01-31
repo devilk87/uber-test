@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+    <title>AfterUber - the cheapest cars</title>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+</head>
+<body>
+
+<nav class="navbar navbar-inverse navbar-static-top">
+    <div class="container">
+        <a href="#" class="navbar-brand">AfterUber</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <div class="row">
+        <div class="col-sm-6">
+            <div class="input-group form-inline panel">
+                <span class="input-group-addon">Start address</span>
+                <input type="text" class="form-control typeahead" placeholder="Start address..." data-type="start" />
+            </div>
+        </div>
+        <div class="col-sm-6">
+            <div class="input-group form-inline panel">
+                <span class="input-group-addon">Destination address</span>
+                <input type="text" class="form-control typeahead" placeholder="Destination address..." data-type="end"/>
+            </div>
+        </div>
+    </div>
+
+    <button type="button" class="btn btn-primary btn-block" id="submit">Search car</button>
+</div>
+
+<div class="container" id="resultsWrapper" style="display:none;">
+    <div class="panel panel-default">
+        <div class="panel-heading">
+            <h3 class="panel-title">Choose your AfterUber</h3>
+        </div>
+        <div class="panel-body" id="results">
+        </div>
+    </div>
+</div>
+<script
+        src="http://code.jquery.com/jquery-3.3.1.min.js"
+        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-3-typeahead/4.0.2/bootstrap3-typeahead.js"></script>
+<script>
+    $( document ).ready(function() {
+
+        var selectedValues = {
+            start: null,
+            end: null
+        };
+        var map = {};
+        $('.typeahead').typeahead({
+            source: function (query, process) {
+                return $.get('http://localhost:3599/ru/address/' + query, function (data) {
+                    var res = [];
+                    map = {};
+
+                    $.each(data.addresses, function (i, address) {
+                        map[address.formatted_address] = address;
+                        res.push(address.formatted_address);
+                    });
+                    return process(res);
+                });
+            },
+            matcher: function () {
+                return true
+            },
+            updater: function (obj) {
+                var inputType = this.$element.data('type');
+
+                selectedValues[inputType] = map[obj];
+                $('#submit').show();
+                $('#resultsWrapper').hide();
+                return obj;
+            }
+        });
+
+        function formatResult(item) {
+            return $('<div />').addClass('col-sm-3').append(
+                $('<input />').attr('type', 'button').addClass('btn btn-default btn-block').attr('value', [item.display_name, item.estimate].join(' '))
+            );
+        }
+
+        $('#submit').on('click', function () {
+            var self = this;
+            if (selectedValues.start && selectedValues.end) {
+                $.get('http://localhost:3599/afteruber/prices', selectedValues, function (data) {
+                    $('#results').empty();
+                    $.each(data, function (key, item) {
+                        $('#results').append(formatResult(item));
+                    });
+                    $('#resultsWrapper').show();
+                    $(self).hide();
+                });
+            }
+        });
+    });
+
+</script>
+
+</body>
+</html>
