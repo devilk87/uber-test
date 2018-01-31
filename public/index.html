@@ -92,7 +92,7 @@
             if (selectedValues.start && selectedValues.end) {
                 $.get('http://localhost:3599/afteruber/prices', selectedValues, function (data) {
                     $('#results').empty();
-                    $.each(data, function (key, item) {
+                    $.each(data.prices, function (key, item) {
                         $('#results').append(formatResult(item));
                     });
                     $('#resultsWrapper').show();

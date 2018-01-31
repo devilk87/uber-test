@@ -5,7 +5,8 @@
   "main": "app.js",
   "scripts": {
     "app": "nodemon",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test:system",
+    "test:system": "mocha --reporter spec tests/system/*"
   },
   "repository": {
     "type": "git",
@@ -20,11 +21,16 @@
   "dependencies": {
     "bluebird": "^3.5.1",
     "body-parser": "^1.18.2",
+    "chai": "^4.1.2",
+    "chai-http": "^3.0.0",
     "config": "^1.29.2",
     "currency-symbol-map": "^4.0.3",
     "express": "^4.16.2",
+    "express-validator": "^4.3.0",
+    "mocha": "^5.0.0",
     "nodemon": "^1.14.11",
     "process": "^0.11.10",
-    "request": "^2.83.0"
+    "request": "^2.83.0",
+    "sinon": "^4.2.2"
   }
 }
