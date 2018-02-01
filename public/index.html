@@ -4,6 +4,7 @@
     <title>AfterUber - the cheapest cars</title>
     <meta charset="utf-8">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 </head>
 <body>
 
@@ -30,7 +31,8 @@
         </div>
     </div>
 
-    <button type="button" class="btn btn-primary btn-block" id="submit">Search car</button>
+    <button type="button" class="btn btn-primary btn-block" id="submit"><span class="text">Search car &nbsp;</span><i class="fa fa-circle-o-notch fa-spin loading" style="font-size:24px;display:none;"></i></button>
+
 </div>
 
 <div class="container" id="resultsWrapper" style="display:none;">
@@ -48,59 +50,141 @@
         crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-3-typeahead/4.0.2/bootstrap3-typeahead.js"></script>
 <script>
-    $( document ).ready(function() {
+    (function($) {
 
-        var selectedValues = {
-            start: null,
-            end: null
-        };
-        var map = {};
-        $('.typeahead').typeahead({
-            source: function (query, process) {
-                return $.get('http://localhost:3599/ru/address/' + query, function (data) {
-                    var res = [];
-                    map = {};
+        function AfterUber(config) {
+            this.$submit = $(config.submitSelector);
+            this.$results = $(config.resultsSelector);
+            this.$resultsWrapper = $(config.resultsWrapper);
+            this.$typeAheads = $(config.typeAheadsSelector);
 
-                    $.each(data.addresses, function (i, address) {
-                        map[address.formatted_address] = address;
-                        res.push(address.formatted_address);
-                    });
-                    return process(res);
-                });
-            },
-            matcher: function () {
-                return true
-            },
-            updater: function (obj) {
-                var inputType = this.$element.data('type');
+            this.selectedPoints = {
+                start: null,
+                end: null
+            };
+            this.map = {};
 
-                selectedValues[inputType] = map[obj];
-                $('#submit').show();
-                $('#resultsWrapper').hide();
-                return obj;
-            }
-        });
-
-        function formatResult(item) {
-            return $('<div />').addClass('col-sm-3').append(
-                $('<input />').attr('type', 'button').addClass('btn btn-default btn-block').attr('value', [item.display_name, item.estimate].join(' '))
-            );
+            this.bindTypeaheads();
+            this.bindSubmit();
         }
 
-        $('#submit').on('click', function () {
-            var self = this;
-            if (selectedValues.start && selectedValues.end) {
-                $.get('http://localhost:3599/afteruber/prices', selectedValues, function (data) {
-                    $('#results').empty();
-                    $.each(data.prices, function (key, item) {
-                        $('#results').append(formatResult(item));
+        AfterUber.prototype = {
+            formatResult: function formatResult (item) {
+                var self = this;
+                var $input = $('<input />')
+                    .addClass('btn btn-default btn-block')
+                    .attr('type', 'button')
+                    .attr('value', [item.display_name, item.estimate].join(' '))
+                    .on('click', function () {
+                        self.onOrderCar(item);
                     });
-                    $('#resultsWrapper').show();
-                    $(self).hide();
+
+                return $('<div />').addClass('col-sm-3').append($input);
+            },
+            showResults: function (data) {
+                this.$results.empty();
+                var self = this;
+                if (data.prices.length) {
+                    $.each(data.prices, function (key, item) {
+                        self.$results.append(self.formatResult(item));
+                    });
+                } else {
+                    self.$results.append('No available cars');
+                }
+                this.$resultsWrapper.show();
+                this.$submit.hide();
+            },
+            onSubmit: function () {
+                var self = this;
+                if (this.selectedPoints.start && this.selectedPoints.end) {
+                    $.get('http://localhost:3599/afteruber/prices', this.selectedPoints)
+                        .done(function (data) {
+                            self.showResults(data);
+                            self.$submit.find('.text').show();
+                            self.$submit.find('.loading').hide();
+                        })
+                        .fail(function (res) {
+                            if (res.status === 422 || res.status === 400) {
+                                self.showError(res.responseJSON.err.message || 'Something went wrong, please try another address');
+                            } else {
+                                self.showError(res.responseJSON.err.message || 'Server error');
+                            }
+                            self.$submit.find('.text').show();
+                            self.$submit.find('.loading').hide();
+                        });
+                }
+            },
+            bindSubmit: function () {
+                var self = this;
+                this.$submit.on('click', function () {
+                    self.$submit.find('.text').hide();
+                    self.$submit.find('.loading').show();
+                    self.onSubmit();
                 });
+            },
+            bindTypeaheads: function () {
+                var self = this;
+                this.$typeAheads.typeahead({
+                    source: function (query, process) {
+                        if (query == '') {
+                            return process([]);
+                        } else {
+                            return $.get('http://localhost:3599/ru/address/' + query)
+                                .done(function (data) {
+                                    var res = [];
+                                    self.map = {};
+
+                                    $.each(data.addresses, function (i, address) {
+                                        self.map[address.formatted_address] = address;
+                                        res.push(address.formatted_address);
+                                    });
+                                    return process(res);
+                                });
+                        }
+                    },
+                    matcher: function () {
+                        return true
+                    },
+                    updater: function (obj) {
+                        var inputType = this.$element.data('type');
+
+                        self.selectedPoints[inputType] = self.map[obj];
+                        self.removeErrors();
+                        self.$resultsWrapper.hide();
+                        return obj;
+                    }
+                });
+            },
+            removeErrors: function () {
+                $('.alert').remove();
+                this.$submit.show();
+            },
+            showError: function (errorMsg) {
+                var $wrap = $('<div />').addClass('alert alert-danger').attr('role', 'alert');
+                var $msg = $('<span />').addClass('sr-only').text('Error: ');
+                $wrap
+                    .append($('<span />').addClass('glyphicon glyphicon-exclamation-sign').attr('aria-hidden', 'true'))
+                    .append($msg)
+                    .append(errorMsg);
+                this.$submit.hide().after($wrap);
+            },
+            onOrderCar: function (product) {
+                console.log('User wants to order', product);
+                alert('Sorry we are currently developing this part! :(');
             }
+
+        };
+
+        $(document).ready(function () {
+            new AfterUber({
+                submitSelector: '#submit',
+                resultsSelector: '#results',
+                resultsWrapper: '#resultsWrapper',
+                typeAheadsSelector: '.typeahead'
+            });
         });
-    });
+
+    })(jQuery);
 
 </script>
 
